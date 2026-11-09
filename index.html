@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner Undangan</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; background: #111; color: #fff; }
+    input, button { font-size: 16px; padding: 10px; border-radius: 8px; border: 0; }
+    button { background: #2d6cdf; color: #fff; }
+    button:disabled { background: #555; }
+    #reader { width: 100%; max-width: 420px; margin: 12px auto; }
+    #stats { margin: 10px 0; font-size: 18px; font-weight: 600; }
+    #result { margin-top: 12px; padding: 18px; border-radius: 12px; text-align: center;
+              font-size: 20px; font-weight: 600; background: #333; }
+    .OK { background: #1a9c4a !important; }
+    .SUDAH { background: #d98a00 !important; }
+    .DITOLAK, .ERROR { background: #c62828 !important; }
+    .row { display: flex; justify-content: space-between; align-items: center;
+           padding: 10px; margin-top: 6px; background: #222; border-radius: 8px; }
+    .row small { color: #aaa; }
+    h4 { margin: 20px 0 6px; }
+  </style>
+</head>
+<body>
+  <h3>Scanner Undangan</h3>
+  <input id="pin" type="password" placeholder="PIN panitia" />
+  <button onclick="start()">Mulai</button>
+
+  <div id="stats">Hadir: - / -</div>
+  <div id="reader"></div>
+  <div id="result">Menunggu scan...</div>
+
+  <h4>Cek manual (lupa bawa QR)</h4>
+  <input id="q" placeholder="Ketik nama tamu" oninput="search()" />
+  <div id="list"></div>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script>
+    // GANTI dengan URL web app Apps Script (berakhiran /exec)
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxlfAjCievzNkIEDWQgSgnPdZDmOmD7_GEhsHao-4V_hAF089au2rLyCKvAaJ7q9hf1/exec';
+
+    let busy = false, scanner, timer, searchTimer;
+    const pin = () => document.getElementById('pin').value;
+
+    async function api(payload) {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      return r.json();
+    }
+
+    function start() {
+      if (!pin()) { show({ status: 'ERROR', msg: 'Isi PIN dulu' }); return; }
+      refreshStats();
+      clearInterval(timer);
+      timer = setInterval(refreshStats, 15000);
+      if (scanner) return;
+      scanner = new Html5Qrcode('reader');
+      scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 250 }, onScan)
+        .catch(err => { scanner = null; show({ status: 'ERROR', msg: 'Kamera gagal: ' + err }); });
+    }
+
+    function onScan(text) {
+      if (busy) return;
+      busy = true;
+      doCheckIn(text).finally(() => setTimeout(() => busy = false, 2500));
+    }
+
+    async function doCheckIn(token) {
+      try {
+        const res = await api({ action: 'checkIn', token, pin: pin() });
+        show(res);
+        refreshStats();
+      } catch (e) {
+        show({ status: 'ERROR', msg: 'Gagal terhubung: ' + e.message });
+      }
+    }
+
+    async function refreshStats() {
+      const el = document.getElementById('stats');
+      try {
+        const s = await api({ action: 'stats', pin: pin() });
+        el.textContent = s.error ? s.error : 'Hadir: ' + s.hadir + ' / ' + s.total;
+      } catch (e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    function search() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(async () => {
+        try {
+          const items = await api({ action: 'search', q: document.getElementById('q').value, pin: pin() });
+          renderList(Array.isArray(items) ? items : []);
+        } catch (e) { renderList([]); }
+      }, 400);
+    }
+
+    function renderList(items) {
+      const el = document.getElementById('list');
+      el.innerHTML = '';
+      items.forEach(g => {
+        const d = document.createElement('div');
+        d.className = 'row';
+        const info = document.createElement('div');
+        info.textContent = g.nama + ' ';
+        const sm = document.createElement('small');
+        sm.textContent = g.hp;
+        info.appendChild(document.createElement('br'));
+        info.appendChild(sm);
+        const b = document.createElement('button');
+        b.textContent = g.hadir ? 'Sudah hadir' : 'Check-in';
+        b.disabled = g.hadir;
+        b.onclick = async () => { b.disabled = true; await doCheckIn(g.token); search(); };
+        d.appendChild(info);
+        d.appendChild(b);
+        el.appendChild(d);
+      });
+    }
+
+    function show(r) {
+      const el = document.getElementById('result');
+      el.className = r.status;
+      el.textContent = (r.nama ? r.nama + ' - ' : '') + (r.status === 'OK' ? '✅ ' : '') + (r.msg || r.status);
+    }
+  </script>
+</body>
+</html>
