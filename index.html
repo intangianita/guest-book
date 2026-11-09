@@ -38,7 +38,7 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
     // GANTI dengan URL web app Apps Script (berakhiran /exec)
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwR667k5sx86kcmGLNWZSintwAOK1-nnIsQA_PcSBcu0lKQj1JiHzAqh5JeaDysH1rT/exec';
+    const API_URL = 'PASTE_URL_EXEC_DI_SINI';
 
     let busy = false, scanner, timer, searchTimer;
     const pin = () => document.getElementById('pin').value;
@@ -59,7 +59,7 @@
       timer = setInterval(refreshStats, 15000);
       if (scanner) return;
       scanner = new Html5Qrcode('reader');
-      scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 250 }, onScan)
+      scanner.start({ facingMode: 'user' }, { fps: 10, qrbox: 250 }, onScan)
         .catch(err => { scanner = null; show({ status: 'ERROR', msg: 'Kamera gagal: ' + err }); });
     }
 
