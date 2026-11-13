@@ -3,128 +3,894 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Scanner Undangan</title>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; background: #111; color: #fff; }
-    input, button { font-size: 16px; padding: 10px; border-radius: 8px; border: 0; }
-    button { background: #2d6cdf; color: #fff; }
-    button:disabled { background: #555; }
-    #reader { width: 100%; max-width: 420px; margin: 12px auto; }
-    #stats { margin: 10px 0; font-size: 18px; font-weight: 600; }
-    #result { margin-top: 12px; padding: 18px; border-radius: 12px; text-align: center;
-              font-size: 20px; font-weight: 600; background: #333; }
-    .OK { background: #1a9c4a !important; }
-    .SUDAH { background: #d98a00 !important; }
-    .DITOLAK, .ERROR { background: #c62828 !important; }
-    .row { display: flex; justify-content: space-between; align-items: center;
-           padding: 10px; margin-top: 6px; background: #222; border-radius: 8px; }
-    .row small { color: #aaa; }
-    h4 { margin: 20px 0 6px; }
-  </style>
-</head>
-<body>
-  <h3>Scanner Undangan</h3>
-  <input id="pin" type="password" placeholder="PIN panitia" />
-  <button onclick="start()">Mulai</button>
-
-  <div id="stats">Hadir: - / -</div>
-  <div id="reader"></div>
-  <div id="result">Menunggu scan...</div>
-
-  <h4>Cek manual (lupa bawa QR)</h4>
-  <input id="q" placeholder="Ketik nama tamu" oninput="search()" />
-  <div id="list"></div>
+  <title>Digital Wedding Guest Book</title>
 
   <script src="https://unpkg.com/html5-qrcode"></script>
-  <script>
-    // GANTI dengan URL web app Apps Script (berakhiran /exec)
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwR667k5sx86kcmGLNWZSintwAOK1-nnIsQA_PcSBcu0lKQj1JiHzAqh5JeaDysH1rT/exec';
 
-    let busy = false, scanner, timer, searchTimer;
-    const pin = () => document.getElementById('pin').value;
+  <style>
+    :root {
+      --blue: #b9ddff;
+      --blue-dark: #6caee8;
+      --pink: #ffc9df;
+      --pink-dark: #e994b8;
+      --lavender: #e7ddff;
+      --navy: #273653;
+      --muted: #75809a;
+      --white: #ffffff;
+      --success: #63bd91;
+      --warning: #e6ad56;
+      --danger: #e27582;
+      --shadow: 0 14px 35px rgba(91, 123, 171, 0.16);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--navy);
+      background:
+        radial-gradient(circle at 10% 5%, #ffe4ef 0 12%, transparent 30%),
+        radial-gradient(circle at 92% 10%, #d6edff 0 13%, transparent 31%),
+        linear-gradient(145deg, #f9fbff, #fff5fa);
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .app-shell {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 22px 16px 42px;
+    }
+
+    .top-decoration {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      color: var(--pink-dark);
+      font-size: 22px;
+    }
+
+    .brand-card {
+      position: relative;
+      overflow: hidden;
+      padding: 28px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      border-radius: 30px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.94), rgba(236,247,255,.9));
+      box-shadow: var(--shadow);
+    }
+
+    .brand-card::after {
+      content: "♡";
+      position: absolute;
+      right: 22px;
+      bottom: -26px;
+      color: rgba(233, 148, 184, .18);
+      font-size: 115px;
+      transform: rotate(-15deg);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--pink-dark);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 560px;
+      margin-bottom: 10px;
+      font-size: clamp(28px, 8vw, 52px);
+      line-height: 1.04;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      max-width: 560px;
+      margin-bottom: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .content-grid {
+      display: grid;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .card {
+      border: 1px solid rgba(255, 255, 255, .9);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .87);
+      box-shadow: var(--shadow);
+    }
+
+    .scanner-card {
+      padding: 18px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-heading h2 {
+      margin-bottom: 5px;
+      font-size: 20px;
+    }
+
+    .section-heading p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .primary-button {
+      min-height: 48px;
+      padding: 0 18px;
+      border-radius: 15px;
+      background: linear-gradient(135deg, var(--blue-dark), #8a9ee8);
+      color: white;
+      font-weight: 800;
+      box-shadow: 0 8px 18px rgba(108, 174, 232, .3);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+
+    .primary-button:hover,
+    .primary-button:focus-visible {
+      transform: translateY(-2px);
+      box-shadow: 0 11px 22px rgba(108, 174, 232, .38);
+    }
+
+    .scanner-wrap {
+      position: relative;
+      min-height: 300px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      padding: 14px;
+      border: 2px dashed rgba(108, 174, 232, .55);
+      border-radius: 22px;
+      background:
+        linear-gradient(140deg, rgba(230, 245, 255, .9), rgba(255, 236, 246, .88));
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+      overflow: hidden;
+      border-radius: 18px;
+    }
+
+    #reader video {
+      border-radius: 18px;
+    }
+
+    .scanner-guide {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: min(62vw, 230px);
+      height: min(62vw, 230px);
+      border: 3px solid rgba(255, 255, 255, .92);
+      border-radius: 25px;
+      box-shadow:
+        0 0 0 999px rgba(39, 54, 83, .08),
+        0 0 22px rgba(255, 255, 255, .9);
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+    }
+
+    .scanner-guide::before,
+    .scanner-guide::after {
+      content: "";
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-color: var(--pink-dark);
+      border-style: solid;
+    }
+
+    .scanner-guide::before {
+      top: -3px;
+      left: -3px;
+      border-width: 5px 0 0 5px;
+      border-radius: 10px 0 0 0;
+    }
+
+    .scanner-guide::after {
+      right: -3px;
+      bottom: -3px;
+      border-width: 0 5px 5px 0;
+      border-radius: 0 0 10px 0;
+    }
+
+    .scanner-help {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .stats-card {
+      display: grid;
+      gap: 14px;
+      padding: 20px;
+      background:
+        linear-gradient(135deg, rgba(213, 238, 255, .92), rgba(255, 222, 237, .92));
+    }
+
+    .stats-label {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    #stats {
+      margin: 0;
+      color: var(--navy);
+      font-size: clamp(28px, 8vw, 46px);
+      font-weight: 900;
+      letter-spacing: -0.05em;
+    }
+
+    .progress-track {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, .72);
+    }
+
+    #progressBar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue-dark), var(--pink-dark));
+      transition: width .35s ease;
+    }
+
+    #result {
+      margin-top: 16px;
+      padding: 19px;
+      border-radius: 19px;
+      background: #f4f7fc;
+      color: var(--navy);
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.4;
+      text-align: center;
+      transition: background .25s ease, transform .25s ease;
+    }
+
+    #result:not(:empty) {
+      transform: translateY(-1px);
+    }
+
+    #result.OK {
+      background: #d8f5e5;
+      color: #176d45;
+    }
+
+    #result.SUDAH {
+      background: #fff0c9;
+      color: #825b12;
+    }
+
+    #result.DITOLAK,
+    #result.ERROR {
+      background: #ffe0e4;
+      color: #963c4c;
+    }
+
+    .manual-card,
+    .recent-card {
+      padding: 20px;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap span {
+      position: absolute;
+      top: 50%;
+      left: 15px;
+      color: var(--pink-dark);
+      font-size: 19px;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    input {
+      width: 100%;
+      min-height: 50px;
+      padding: 12px 15px 12px 45px;
+      border: 2px solid #e6eaf3;
+      border-radius: 15px;
+      outline: none;
+      background: #fff;
+      color: var(--navy);
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    input:focus {
+      border-color: var(--blue-dark);
+      box-shadow: 0 0 0 4px rgba(108, 174, 232, .15);
+    }
+
+    #list,
+    #recentList {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .row,
+    .recent-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid #edf0f6;
+      border-radius: 17px;
+      background: #fff;
+    }
+
+    .guest-info {
+      min-width: 0;
+    }
+
+    .guest-name {
+      margin-bottom: 4px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .guest-meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .checkin-button {
+      flex: 0 0 auto;
+      min-height: 42px;
+      padding: 0 13px;
+      border-radius: 12px;
+      background: #e2f1ff;
+      color: #3479b5;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .checkin-button:not(:disabled):hover {
+      background: var(--blue);
+    }
+
+    .recent-avatar {
+      display: grid;
+      flex: 0 0 40px;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--pink));
+      color: white;
+      font-weight: 900;
+    }
+
+    .recent-content {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .empty-state {
+      padding: 20px 14px;
+      border: 1px dashed #dce3f0;
+      border-radius: 17px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .footer-note {
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    @media (min-width: 680px) {
+      .app-shell {
+        padding-top: 36px;
+      }
+
+      .content-grid {
+        grid-template-columns: 1.08fr .92fr;
+        align-items: start;
+      }
+
+      .scanner-card {
+        grid-row: span 2;
+      }
+
+      .manual-card,
+      .recent-card {
+        padding: 22px;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .section-heading {
+        display: block;
+      }
+
+      .section-heading .primary-button {
+        width: 100%;
+        margin-top: 12px;
+      }
+
+      .row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .checkin-button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app-shell">
+    <div class="top-decoration" aria-hidden="true">
+      <span>♡</span>
+      <span>✦</span>
+      <span>♡</span>
+    </div>
+
+    <header class="brand-card">
+      <p class="eyebrow">Scanner Panitia</p>
+      <h1>Digital Wedding Guest Book</h1>
+      <p class="subtitle">
+        Scan QR undangan untuk mencatat kehadiran tamu secara cepat dan praktis.
+      </p>
+    </header>
+
+    <section class="content-grid">
+      <article class="card scanner-card">
+        <div class="section-heading">
+          <div>
+            <h2>Scan QR Undangan</h2>
+            <p>Arahkan kamera ke QR code tamu.</p>
+          </div>
+
+          <button class="primary-button" onclick="start()">
+            Mulai Scanner
+          </button>
+        </div>
+
+        <div class="scanner-wrap">
+          <div id="reader"></div>
+          <div class="scanner-guide" aria-hidden="true"></div>
+        </div>
+
+        <p class="scanner-help">
+          Pastikan QR code terlihat jelas dan pencahayaan cukup.
+        </p>
+
+        <div id="result" aria-live="polite">
+          Menunggu scan...
+        </div>
+      </article>
+
+      <article class="card stats-card">
+        <div>
+          <div class="stats-label">Kehadiran Tamu</div>
+          <div id="stats" aria-live="polite">Hadir: - / -</div>
+        </div>
+
+        <div
+          class="progress-track"
+          role="progressbar"
+          aria-label="Progress kehadiran tamu"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <div id="progressBar"></div>
+        </div>
+      </article>
+
+      <article class="card manual-card">
+        <div class="section-heading">
+          <div>
+            <h2>Cek Manual</h2>
+            <p>Gunakan jika tamu lupa membawa QR.</p>
+          </div>
+        </div>
+
+        <div class="input-wrap">
+          <span aria-hidden="true">⌕</span>
+          <input
+            id="q"
+            type="search"
+            placeholder="Ketik nama tamu"
+            autocomplete="off"
+            oninput="search()"
+          >
+        </div>
+
+        <div id="list">
+          <div class="empty-state">
+            Ketik nama tamu untuk melakukan pencarian.
+          </div>
+        </div>
+      </article>
+
+      <article class="card recent-card">
+        <div class="section-heading">
+          <div>
+            <h2>Tamu Terbaru Hadir</h2>
+            <p>Data aktual dari server.</p>
+          </div>
+        </div>
+
+        <div id="recentList">
+          <div class="empty-state">
+            Belum ada data tamu terbaru dari server.
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <p class="footer-note">
+      Data kehadiran akan diperbarui secara berkala setelah scanner dimulai.
+    </p>
+  </main>
+
+  <script>
+    // Ganti hanya jika URL Web App Apps Script berubah.
+    const API_URL =
+      'https://script.google.com/macros/s/AKfycbwR667k5sx86kcmGLNWZSintwAOK1-nnIsQA_PcSBcu0lKQj1JiHzAqh5JeaDysH1rT/exec';
+
+    let busy = false;
+    let scanner;
+    let timer;
+    let searchTimer;
 
     async function api(payload) {
       const r = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
         body: JSON.stringify(payload)
       });
+
+      if (!r.ok) {
+        throw new Error('Server tidak merespons dengan baik');
+      }
+
       return r.json();
     }
 
     function start() {
-      if (!pin()) { show({ status: 'ERROR', msg: 'Isi PIN dulu' }); return; }
       refreshStats();
+
       clearInterval(timer);
       timer = setInterval(refreshStats, 15000);
-      if (scanner) return;
+
+      if (scanner) {
+        show({
+          status: 'OK',
+          msg: 'Scanner sudah aktif'
+        });
+        return;
+      }
+
       scanner = new Html5Qrcode('reader');
-      scanner.start({ facingMode: 'user' }, { fps: 10, qrbox: 250 }, onScan)
-        .catch(err => { scanner = null; show({ status: 'ERROR', msg: 'Kamera gagal: ' + err }); });
+
+      scanner
+        .start(
+          {
+            facingMode: 'environment'
+          },
+          {
+            fps: 10,
+            qrbox: 250
+          },
+          onScan
+        )
+        .then(() => {
+          show({
+            status: 'OK',
+            msg: 'Scanner aktif, silakan arahkan kamera ke QR'
+          });
+        })
+        .catch(err => {
+          scanner = null;
+
+          show({
+            status: 'ERROR',
+            msg: 'Kamera gagal dibuka: ' + err
+          });
+        });
     }
 
     function onScan(text) {
-      if (busy) return;
+      if (busy) {
+        return;
+      }
+
       busy = true;
-      doCheckIn(text).finally(() => setTimeout(() => busy = false, 2500));
+
+      doCheckIn(text).finally(() => {
+        setTimeout(() => {
+          busy = false;
+        }, 2500);
+      });
     }
 
     async function doCheckIn(token) {
       try {
-        const res = await api({ action: 'checkIn', token, pin: pin() });
+        const res = await api({
+          action: 'checkIn',
+          token
+        });
+
         show(res);
-        refreshStats();
+        await refreshStats();
+
+        const queryInput = document.getElementById('q');
+
+        if (queryInput.value.trim()) {
+          search();
+        }
       } catch (e) {
-        show({ status: 'ERROR', msg: 'Gagal terhubung: ' + e.message });
+        show({
+          status: 'ERROR',
+          msg: 'Gagal terhubung: ' + e.message
+        });
       }
     }
 
     async function refreshStats() {
       const el = document.getElementById('stats');
+
       try {
-        const s = await api({ action: 'stats', pin: pin() });
-        el.textContent = s.error ? s.error : 'Hadir: ' + s.hadir + ' / ' + s.total;
+        const s = await api({
+          action: 'stats'
+        });
+
+        if (s.error) {
+          el.textContent = s.error;
+          return;
+        }
+
+        const hadir = Number(s.hadir);
+        const total = Number(s.total);
+
+        if (Number.isFinite(hadir) && Number.isFinite(total)) {
+          el.textContent = 'Hadir: ' + hadir + ' / ' + total;
+          updateProgress(hadir, total);
+        } else {
+          el.textContent = 'Hadir: - / -';
+          updateProgress(0, 0);
+        }
+
+        /*
+          Recent guest hanya ditampilkan jika backend mengirim:
+          {
+            recent: [
+              {
+                nama: "Nama Tamu",
+                waktu: "19:42"
+              }
+            ]
+          }
+
+          Jika properti recent belum tersedia, empty state akan ditampilkan.
+        */
+        renderRecent(Array.isArray(s.recent) ? s.recent : []);
       } catch (e) {
-        el.textContent = 'Error: ' + e.message;
+        el.textContent = 'Error koneksi';
+        updateProgress(0, 0);
+        renderRecent([]);
       }
+    }
+
+    function updateProgress(hadir, total) {
+      const bar = document.getElementById('progressBar');
+      const track = document.querySelector('.progress-track');
+
+      let percentage = 0;
+
+      if (total > 0) {
+        percentage = Math.min(100, Math.max(0, (hadir / total) * 100));
+      }
+
+      bar.style.width = percentage + '%';
+      track.setAttribute('aria-valuenow', Math.round(percentage));
     }
 
     function search() {
       clearTimeout(searchTimer);
+
       searchTimer = setTimeout(async () => {
+        const query = document.getElementById('q').value.trim();
+
+        if (!query) {
+          renderList([]);
+          return;
+        }
+
         try {
-          const items = await api({ action: 'search', q: document.getElementById('q').value, pin: pin() });
+          const items = await api({
+            action: 'search',
+            q: query
+          });
+
           renderList(Array.isArray(items) ? items : []);
-        } catch (e) { renderList([]); }
+        } catch (e) {
+          renderList([]);
+        }
       }, 400);
     }
 
     function renderList(items) {
       const el = document.getElementById('list');
       el.innerHTML = '';
+
+      if (!items.length) {
+        el.innerHTML = `
+          <div class="empty-state">
+            Tidak ada tamu yang ditemukan.
+          </div>
+        `;
+        return;
+      }
+
       items.forEach(g => {
         const d = document.createElement('div');
         d.className = 'row';
+
         const info = document.createElement('div');
-        info.textContent = g.nama + ' ';
-        const sm = document.createElement('small');
-        sm.textContent = g.hp;
-        info.appendChild(document.createElement('br'));
-        info.appendChild(sm);
+        info.className = 'guest-info';
+
+        const name = document.createElement('div');
+        name.className = 'guest-name';
+        name.textContent = g.nama || 'Nama tidak tersedia';
+
+        const phone = document.createElement('div');
+        phone.className = 'guest-meta';
+        phone.textContent = g.hp || '';
+
+        info.appendChild(name);
+        info.appendChild(phone);
+
         const b = document.createElement('button');
+        b.className = 'checkin-button';
         b.textContent = g.hadir ? 'Sudah hadir' : 'Check-in';
-        b.disabled = g.hadir;
-        b.onclick = async () => { b.disabled = true; await doCheckIn(g.token); search(); };
+        b.disabled = Boolean(g.hadir);
+
+        b.onclick = async () => {
+          b.disabled = true;
+          await doCheckIn(g.token);
+          search();
+        };
+
         d.appendChild(info);
         d.appendChild(b);
         el.appendChild(d);
       });
     }
 
+    function renderRecent(items) {
+      const el = document.getElementById('recentList');
+      el.innerHTML = '';
+
+      if (!items.length) {
+        el.innerHTML = `
+          <div class="empty-state">
+            Belum ada data tamu terbaru dari server.
+          </div>
+        `;
+        return;
+      }
+
+      items.forEach(g => {
+        const row = document.createElement('div');
+        row.className = 'recent-row';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'recent-avatar';
+        avatar.textContent = getInitial(g.nama);
+
+        const content = document.createElement('div');
+        content.className = 'recent-content';
+
+        const name = document.createElement('div');
+        name.className = 'guest-name';
+        name.textContent = g.nama || 'Nama tidak tersedia';
+
+        const time = document.createElement('div');
+        time.className = 'guest-meta';
+        time.textContent =
+          g.waktu ||
+          g.time ||
+          g.timestamp ||
+          g.jam ||
+          'Waktu tidak tersedia';
+
+        content.appendChild(name);
+        content.appendChild(time);
+
+        row.appendChild(avatar);
+        row.appendChild(content);
+        el.appendChild(row);
+      });
+    }
+
+    function getInitial(name) {
+      if (!name) {
+        return '?';
+      }
+
+      return name.trim().charAt(0).toUpperCase();
+    }
+
     function show(r) {
       const el = document.getElementById('result');
-      el.className = r.status;
-      el.textContent = (r.nama ? r.nama + ' - ' : '') + (r.status === 'OK' ? '✅ ' : '') + (r.msg || r.status);
+      const status = r.status || 'ERROR';
+
+      el.className = status;
+
+      const prefix = r.nama ? r.nama + ' - ' : '';
+      const icon = status === 'OK' ? '✅ ' : '';
+
+      el.textContent =
+        prefix + icon + (r.msg || status);
     }
   </script>
 </body>
