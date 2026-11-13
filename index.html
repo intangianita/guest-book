@@ -590,48 +590,30 @@
   </main>
 
   <script>
-    // Halaman ini harus dibuka dari URL Web App Apps Script (doGet),
-    // bukan dari GitHub Pages / hosting eksternal, agar google.script.run tersedia.
+    // Ganti hanya jika URL Web App Apps Script berubah.
+    const API_URL =
+      'https://script.google.com/macros/s/AKfycbxnmCBp2WW4oevWOY-90Yl2jmRlEHlm3K0tqBjj4JouRLL2eUL-rUpvs9u-u_sthA3E/exec';
 
     let busy = false;
     let scanner;
     let timer;
     let searchTimer;
 
-    // Bridge ke backend Apps Script tanpa fetch/CORS.
-    function api(payload) {
-      return new Promise((resolve, reject) => {
-        if (!window.google || !google.script || !google.script.run) {
-          reject(new Error(
-            'Halaman harus dibuka melalui URL Web App Google Apps Script.'
-          ));
-          return;
-        }
-
-        const runner = google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(err => reject(
-            new Error(err && err.message ? err.message : String(err))
-          ));
-
-        switch (payload.action) {
-          case 'checkIn':
-            runner.checkIn(payload.token);
-            break;
-          case 'stats':
-            runner.getStats();
-            break;
-          case 'search':
-            runner.searchGuest(payload.q);
-            break;
-          default:
-            reject(new Error('Aksi tidak dikenal'));
-        }
+    async function api(payload) {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify(payload)
       });
-    }
 
-    // Muat statistik dan tamu terbaru saat halaman dibuka.
-    document.addEventListener('DOMContentLoaded', refreshStats);
+      if (!r.ok) {
+        throw new Error('Server tidak merespons dengan baik');
+      }
+
+      return r.json();
+    }
 
     function start() {
       refreshStats();
@@ -752,13 +734,9 @@
         */
         renderRecent(Array.isArray(s.recent) ? s.recent : []);
       } catch (e) {
-        el.textContent = 'Gagal memuat: ' + e.message;
+        el.textContent = 'Error koneksi';
         updateProgress(0, 0);
-        document.getElementById('recentList').innerHTML = `
-          <div class="empty-state">
-            Data tamu terbaru gagal dimuat. Periksa koneksi dan deployment Apps Script.
-          </div>
-        `;
+        renderRecent([]);
       }
     }
 
